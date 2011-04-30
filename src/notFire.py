@@ -60,13 +60,12 @@ class Player(pygame.sprite.Sprite):
 	bounce = 24
 	gun_offset = 25
 	images = []
-	fallingSpeed = 4
-	jumpSpeed = 4
+	fallingSpeed = 8 
+	jumpSpeed = 8
 
 	jumpTimeAmountDefault = 100
 	jumpTimeAmount = 200
-	jumpTimeAmountDelta = 21
-
+	jumpTimeAmountDelta = 18
 
 	def __init__(self):
 		pygame.sprite.Sprite.__init__(self, self.containers)
@@ -79,7 +78,8 @@ class Player(pygame.sprite.Sprite):
 		else:
 			self.imageOffset = 0
 		self.image = self.images[self.imageOffset]
-		self.rect = self.image.get_rect(midbottom=SCREENRECT.midbottom)
+#		self.rect = self.image.get_rect(midbottom=SCREENRECT.midbottom)
+		self.rect = self.image.get_rect().move(300,300)
 		self.origtop = self.rect.top
 		self.jumpUpTime = -1
 		self.jumpUpTimer = None
@@ -87,11 +87,23 @@ class Player(pygame.sprite.Sprite):
 		self.falling = False
 		self.secondLastYPos = self.rect.bottom 
 		self.lastYPos = self.rect.bottom
+		self.secondLastXPos = self.rect.left 
+		self.lastXPos = self.rect.left
+		self.collisionHorizontal = False
 
 	def isFalling(self):
 		if(self.secondLastYPos == self.lastYPos):
 			return False
 		else:
+			return True
+
+	def isMoving(self):
+		if((self.secondLastYPos == self.lastYPos)
+				and (self.secondLastXPos == self.lastXPos)):
+			print "movingfalse"
+			return False
+		else:
+			print "movingtrue"
 			return True
 
 	def increaseJumpTime(self):
@@ -111,11 +123,22 @@ class Player(pygame.sprite.Sprite):
 		self.secondLastYPos = self.lastYPos
 		self.lastYPos = self.rect.bottom
 
+		self.secondLastXPos = self.lastXPos
+		self.lastXPos = self.rect.left
+
 	def jump(self):
 		if((self.jumpUpTimer == None) and (not self.isFalling())):
 			self.jumpTimeAmount = self.jumpTimeAmountDefault
 			self.jumpUpTimer = pygame.time.Clock()
 			self.jumpUpTime = 0
+
+	def collisionResolveVert(self, block):
+		self.rect.move_ip(0, -self.fallingSpeed)
+
+	def collisionResolveHor(self, dirn):
+#		self.rect.move_ip(dirn, 0)
+		self.collisionHorizontal = True
+		print "hor"
 
 	def move(self, directionHorizontal):
 		if(self.hasGun):
@@ -142,7 +165,8 @@ class Player(pygame.sprite.Sprite):
 		else:
 			self.rect.move_ip(directionHorizontal*self.speed, 0)
 		'''
-		self.rect.move_ip(directionHorizontal*self.speed, 0)
+		if(not self.collisionHorizontal or not self.isMoving()):
+			self.rect.move_ip(directionHorizontal*self.speed, 0)
 
 		self.rect = self.rect.clamp(SCREENRECT)
 
@@ -217,6 +241,14 @@ class Score(pygame.sprite.Sprite):
 			msg = "Score: %d" % SCORE
 			self.image = self.font.render(msg, 0, self.color)
 
+class Block(pygame.sprite.Sprite):
+	images = []
+
+	def __init__(self, x, y):
+		pygame.sprite.Sprite.__init__(self, self.containers)
+		self.image = self.images[0]
+		self.rect = self.image.get_rect().move(x, y)
+
 
 class GameApp:
 	def __init__(self):
@@ -239,6 +271,9 @@ class GameApp:
 		shotImg = loadImage('shot.gif')
 		Shot.images = [shotImg]
 
+		blockImg = loadImage('block.gif')
+		Block.images = [blockImg]
+
 		pygame.mouse.set_visible(0)
 
 		#create the background, tile the bgd image
@@ -250,15 +285,47 @@ class GameApp:
 		pygame.display.flip()
 		# Initialize Game Groups
 		self.shots = pygame.sprite.Group()
+		self.blocks = pygame.sprite.Group()
 		self.all = pygame.sprite.RenderUpdates()
 
 		#assign default groups to each sprite class
 		Player.containers = self.all
 		Shot.containers = self.shots, self.all
+		Block.containers = self.blocks, self.all
 		self.clock = pygame.time.Clock()
 
 		#Our starting sprites
 		self.player = Player()
+		for x in range(0, SCREENRECT.width, blockImg.get_width()):
+			for y in range(0, SCREENRECT.height, blockImg.get_height()):
+				'''
+				if(x==0 or y==0 
+						or x==SCREENRECT.width - blockImg.get_width() 
+						or y==SCREENRECT.height - blockImg.get_height()):
+					Block(x,y)
+				'''
+				if(y==SCREENRECT.height - blockImg.get_height()):
+					Block(x,y)
+
+#		Block(200,320)
+		Block(240,320)
+		Block(280,320)
+
+#		Block(320,280)
+		Block(360,280)
+		Block(400,280)
+
+#		Block(440,240)
+		Block(480,240)
+		Block(520,240)
+
+		Block(600,200)
+
+		Block(480,120)
+
+		Block(360,80)
+
+		Block(200,40)
 
 	def update(self):
 		if(not self.player.alive()):
@@ -300,6 +367,34 @@ class GameApp:
 			for shot in shotsCopy:
 				if( not SCREENRECT.contains(shot.rect) ):
 					self.shots.remove(shot)
+
+			playerCollHor = False
+			horDir = 0
+			playerCollVert = False
+			for block in pygame.sprite.spritecollide(self.player, self.blocks, 0):
+#				playerColl = True
+
+				delta = 4
+
+				if( (block.rect.left < self.player.rect.right) and
+						(block.rect.right > self.player.rect.left)):
+					playerCollHor = True
+
+					if(block.rect.left < self.player.rect.right):
+						horDir = 1
+					else:
+						horDir = -1
+				if( (block.rect.top < self.player.rect.bottom)):
+					playerCollVert = True
+
+			if(playerCollVert):
+				self.player.collisionResolveVert(None)
+
+			if(playerCollHor):
+				self.player.collisionResolveHor(horDir)
+			else:
+				self.player.collisionHorizontal = False
+
 			#cap the framerate
 			self.clock.tick(40)
 			return True
